@@ -1,27 +1,45 @@
-_.defaults this,
-  Before: (object, methodName, adviseMethod) ->
-    YouAreDaBomb(object, methodName).before(adviseMethod)
-  BeforeAnyCallback: (object, methodName, adviseMethod) ->
-    YouAreDaBomb(object, methodName).beforeAnyCallback(adviseMethod)
-  After: (object, methodName, adviseMethod) ->
-    YouAreDaBomb(object, methodName).after(adviseMethod)
-  Around: (object, methodName, adviseMethod) ->
-    YouAreDaBomb(object, methodName).around(adviseMethod)
+get_function = (obj, name) ->
+	fnc = obj[name]
+	if fnc? then fnc else () ->
 
-  AfterAll: (object, methodNames, adviseMethod) ->
-    for methodName in methodNames
-      After(object, methodName, adviseMethod)
+change_function = ( obj, name, chain, number=1) ->
+	obj[name] = (attrs...) ->
+		val = ( el.apply( obj, attrs ) for el in chain )
+		return val[ number ]
 
-  LogAll: (object) ->
-    for own key, value of object
-      if _.isFunction(value)
-        do (key) ->
-          Before(object, key, -> console.log("calling: #{key}"))
+@Before = ( obj, func, callback ) ->
+	old_fnc = get_function( obj, func )
+	change_function( obj, func, [ callback, old_fnc ] )
+	true
 
-  AutoBind: (gui, useCase) ->
-    for key, value of gui
-      if _.isFunction(value)
-        do (key) ->
-          if key.endsWith("Clicked") and useCase[key.remove("Clicked")]
-            After(gui, key, (args) -> useCase[key.remove("Clicked")](args))
+@BeforeAnyCallback = (obj, func, callback) ->
+	console.warn( "TODO" )
+
+@After = ( obj, func, callback ) ->
+	old_fnc = get_function( obj, func )
+	change_function( obj, func, [old_fnc, callback], 0 )
+	true
+
+@Around = (obj, func, before, after) ->
+	old_fnc = get_function( obj, func )
+	change_function( obj, func, [before, old_fnc, after] )
+	true
+
+@AfterAll = (obj, funcs, callback) ->
+	for func in funcs
+		After(obj, func, callback)
+
+@LogAll = (object) ->
+	for own key, value of object
+		if value.call?
+			do (key) ->
+				Before(object, key, -> console.log("calling: #{key}"))
+
+@AutoBind = (gui, useCase) ->
+	for key, value of gui
+		if value.call?
+			do (key) ->
+				name = /(.*)Clicked/.exec( key )[1]
+				if name? and useCase[name]
+					After(gui, key, (args) -> useCase[name](args))
 
